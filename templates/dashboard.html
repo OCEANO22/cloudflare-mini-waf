@@ -3,109 +3,284 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare Mini - Dashboard Manajemen</title>
+    <title>Cloudflare Mini - Enterprise WAF</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f6f9; overflow-x: hidden; }
+        
+        /* LOGIN OVERLAY */
+        #login-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #212529; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: white; padding: 40px; border-radius: 10px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        
+        /* SIDEBAR & LAYOUT */
+        #app-layout { display: none; } /* Disembunyikan sebelum login */
+        #sidebar { min-width: 260px; max-width: 260px; min-height: 100vh; background-color: #1e2227; color: #fff; }
+        #sidebar .nav-link { color: #a1a8b3; padding: 12px 20px; font-weight: 500; margin: 4px 10px; border-radius: 6px; }
+        #sidebar .nav-link:hover, #sidebar .nav-link.active { background-color: #0d6efd; color: white; }
+        #sidebar .nav-link i { width: 25px; }
+        #content { width: 100%; }
+        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 8px; margin-bottom: 20px; }
+        .table-hover tbody tr:hover { background-color: #f8f9fa; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Cloudflare Mini - Admin Dashboard</h1>
-        
-        <h2>Tambah Domain Klien</h2>
-        <form id="domainForm">
-            <div class="form-group">
-                <label>Nama Domain (Misal: web-klien.com)</label>
-                <input type="text" id="domain" required>
-            </div>
-            <div class="form-group">
-                <label>IP / URL Asli (Origin Server) (Misal: http://192.168.1.100)</label>
-                <input type="text" id="origin_server" required>
-            </div>
-            <div class="form-group">
-                <label>Batas Rate Limit (Request per 10 detik)</label>
-                <input type="number" id="rate_limit" value="10" required>
-            </div>
-            <div class="form-group">
-                <label><input type="checkbox" id="waf_enabled" checked> Aktifkan WAF (Anti SQLi & XSS)</label>
-            </div>
-            <button type="submit">Simpan & Aktifkan Proksi</button>
-        </form>
 
-        <h2>Daftar Klien Aktif</h2>
-        <table id="domainTable">
-            <thead>
-                <tr>
-                    <th>Domain</th>
-                    <th>Origin Server</th>
-                    <th>WAF</th>
-                    <th>Rate Limit</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Data akan dimuat dari database melalui JavaScript -->
-            </tbody>
-        </table>
+    <!-- SCREEN LOGIN -->
+    <div id="login-screen">
+        <div class="login-box text-center">
+            <h3 class="mb-4 fw-bold text-dark"><i class="fa-solid fa-shield-halved text-primary"></i> CF-Mini</h3>
+            <form id="loginForm">
+                <div class="mb-3 text-start">
+                    <label class="form-label text-muted small fw-bold">USERNAME</label>
+                    <input type="text" id="loginUser" class="form-control" placeholder="admin / user" required>
+                </div>
+                <div class="mb-4 text-start">
+                    <label class="form-label text-muted small fw-bold">PASSWORD</label>
+                    <input type="password" id="loginPass" class="form-control" placeholder="admin123 / user123" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-bold py-2">Masuk Dashboard</button>
+            </form>
+        </div>
     </div>
 
+    <!-- APP LAYOUT (Setelah Login) -->
+    <div id="app-layout" class="d-flex">
+        <!-- SIDEBAR -->
+        <nav id="sidebar" class="d-flex flex-column py-3">
+            <div class="text-center mb-4">
+                <h4 class="text-white fw-bold"><i class="fa-solid fa-shield-halved text-primary"></i> CF-Mini</h4>
+            </div>
+            <ul class="nav flex-column mb-auto">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" onclick="switchTab('dashboard', this)"><i class="fa-solid fa-chart-line"></i> Beranda</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="switchTab('domains', this)"><i class="fa-solid fa-globe"></i> Manajemen Domain</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="switchTab('logs', this); loadLogs();"><i class="fa-solid fa-list-check"></i> Log Serangan</a>
+                </li>
+            </ul>
+            <div class="px-3 pb-3 text-center">
+                <div class="bg-dark rounded p-3">
+                    <h6 class="mb-1 text-white" id="ui-username">User</h6>
+                    <small class="text-success"><i class="fa-solid fa-circle" style="font-size: 8px;"></i> <span id="ui-role">Role</span></small>
+                </div>
+            </div>
+        </nav>
+
+        <!-- KONTEN UTAMA -->
+        <div id="content" class="d-flex flex-column">
+            <!-- NAVBAR ATAS -->
+            <nav class="navbar navbar-light bg-white px-4 py-3 shadow-sm">
+                <div class="container-fluid">
+                    <h5 class="mb-0 text-dark fw-bold" id="page-title">Beranda</h5>
+                    <button class="btn btn-outline-danger btn-sm" onclick="logout()"><i class="fa-solid fa-sign-out-alt"></i> Keluar</button>
+                </div>
+            </nav>
+
+            <div class="container-fluid p-4">
+                <!-- BERANDA -->
+                <div id="view-dashboard">
+                    <div class="row">
+                        <div class="col-md-4"><div class="card bg-primary text-white p-4 text-center"><h2><i class="fa-solid fa-server"></i></h2><h2 id="total-domains" class="fw-bold">0</h2><p>Domain Terlindungi</p></div></div>
+                        <div class="col-md-4"><div class="card bg-success text-white p-4 text-center"><h2><i class="fa-solid fa-shield-virus"></i></h2><h2 class="fw-bold">Aktif</h2><p>Status WAF</p></div></div>
+                        <div class="col-md-4"><div class="card bg-danger text-white p-4 text-center"><h2><i class="fa-solid fa-bug"></i></h2><h2 id="total-logs" class="fw-bold">0</h2><p>Ancaman Direkam</p></div></div>
+                    </div>
+                </div>
+
+                <!-- MANAJEMEN DOMAIN -->
+                <div id="view-domains" style="display: none;">
+                    <div class="card mb-4" id="formAddContainer">
+                        <div class="card-header bg-white"><i class="fa-solid fa-plus-circle text-primary"></i> Daftarkan Klien Baru</div>
+                        <div class="card-body">
+                            <form id="domainForm" class="row g-3">
+                                <div class="col-md-3"><input type="text" class="form-control" id="domain" placeholder="Domain (web.com)" required></div>
+                                <div class="col-md-4"><input type="text" class="form-control" id="origin_server" placeholder="Origin (http://10.0.0.1)" required></div>
+                                <div class="col-md-2"><input type="number" class="form-control" id="rate_limit" placeholder="Limit/10s" value="20" required></div>
+                                <div class="col-md-1 d-flex align-items-center"><input class="form-check-input me-2" type="checkbox" id="waf_enabled" checked> WAF</div>
+                                <div class="col-md-2"><button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-plus"></i> Tambah</button></div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="domainTable">
+                                <thead class="table-light"><tr><th class="ps-4">Domain</th><th>Origin</th><th>WAF</th><th>Limit</th><th class="pe-4 text-end">Aksi</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOG SERANGAN -->
+                <div id="view-logs" style="display: none;">
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white fw-bold"><i class="fa-solid fa-skull-crossbones"></i> Perekam Ancaman Keamanan</div>
+                        <div class="card-body p-0 table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-sm table-striped mb-0" id="logTable">
+                                <thead class="table-dark"><tr><th class="ps-4">Waktu (WIB)</th><th>IP Penyerang</th><th>Target Domain</th><th>Jenis Ancaman</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT DOMAIN -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-pen-to-square"></i> Edit Konfigurasi Domain</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editForm">
+                        <input type="hidden" id="edit_old_domain">
+                        <div class="mb-3"><label class="form-label">Domain</label><input type="text" class="form-control" id="edit_domain" required></div>
+                        <div class="mb-3"><label class="form-label">Origin Server</label><input type="text" class="form-control" id="edit_origin" required></div>
+                        <div class="mb-3"><label class="form-label">Rate Limit</label><input type="number" class="form-control" id="edit_limit" required></div>
+                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="edit_waf"><label class="form-check-label">WAF Proteksi</label></div>
+                        <button type="submit" class="btn btn-primary w-100 mt-4">Simpan Perubahan</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Fungsi mengambil data dari API backend dan menampilkannya di tabel
+        const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        
+        // --- 1. SISTEM AUTENTIKASI ---
+        function checkAuth() {
+            const role = localStorage.getItem('user_role');
+            if (role) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('app-layout').style.display = 'flex';
+                document.getElementById('ui-username').innerText = localStorage.getItem('username').toUpperCase();
+                document.getElementById('ui-role').innerText = role === 'admin' ? 'Administrator' : 'Pengguna View-Only';
+                
+                // Batasi fitur untuk user biasa
+                if (role !== 'admin') document.getElementById('formAddContainer').style.display = 'none';
+                loadDomains();
+            } else {
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('app-layout').style.display = 'none';
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button'); btn.innerText = "Memeriksa...";
+            const res = await fetch('/api/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: document.getElementById('loginUser').value, password: document.getElementById('loginPass').value})
+            });
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('user_role', data.role);
+                localStorage.setItem('username', data.username);
+                checkAuth();
+            } else {
+                alert('Username / Password Salah!');
+            }
+            btn.innerText = "Masuk Dashboard";
+        });
+
+        function logout() { localStorage.clear(); checkAuth(); }
+
+        // --- 2. LOGIKA TAB MENU ---
+        function switchTab(tabId, el) {
+            ['dashboard', 'domains', 'logs'].forEach(id => document.getElementById('view-' + id).style.display = 'none');
+            document.getElementById('view-' + tabId).style.display = 'block';
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('page-title').innerText = el.innerText.trim();
+        }
+
+        // --- 3. CRUD DOMAIN & PROXY ---
         async function loadDomains() {
-            const response = await fetch('/admin/api/domains');
-            const data = await response.json();
-            const tbody = document.querySelector('#domainTable tbody');
-            tbody.innerHTML = '';
+            const res = await fetch('/admin/api/domains');
+            const data = await res.json();
+            document.getElementById('total-domains').innerText = data.length;
             
+            const tbody = document.querySelector('#domainTable tbody'); tbody.innerHTML = '';
+            const isAdmin = localStorage.getItem('user_role') === 'admin';
+
             data.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${item.domain}</td>
-                    <td>${item.origin_server}</td>
-                    <td>${item.waf_enabled ? 'Aktif' : 'Mati'}</td>
-                    <td>${item.rate_limit} req</td>
-                `;
-                tbody.appendChild(tr);
+                const waf = item.waf_enabled ? '<span class="badge bg-success">Aktif</span>' : '<span class="badge bg-danger">Mati</span>';
+                let actionBtns = '-';
+                if (isAdmin) {
+                    actionBtns = `
+                        <button class="btn btn-sm btn-primary me-1" onclick="openEdit('${item.domain}', '${item.origin_server}', ${item.rate_limit}, ${item.waf_enabled})"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDomain('${item.domain}')"><i class="fa-solid fa-trash"></i></button>`;
+                }
+                tbody.innerHTML += `<tr><td class="ps-4 fw-bold">${item.domain}</td><td class="text-muted">${item.origin_server}</td><td>${waf}</td><td>${item.rate_limit} req</td><td class="pe-4 text-end">${actionBtns}</td></tr>`;
             });
         }
 
-        // Fungsi mengirim data formulir ke API backend
         document.getElementById('domainForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const payload = {
-                domain: document.getElementById('domain').value,
-                origin_server: document.getElementById('origin_server').value,
-                waf_enabled: document.getElementById('waf_enabled').checked,
-                rate_limit: parseInt(document.getElementById('rate_limit').value)
-            };
-
-            const response = await fetch('/admin/api/domains', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            await fetch('/admin/api/domains', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    domain: document.getElementById('domain').value, origin_server: document.getElementById('origin_server').value,
+                    rate_limit: parseInt(document.getElementById('rate_limit').value), waf_enabled: document.getElementById('waf_enabled').checked
+                })
             });
-
-            if (response.ok) {
-                alert("Domain klien berhasil didaftarkan!");
-                document.getElementById('domainForm').reset();
-                loadDomains(); // Muat ulang tabel
-            } else {
-                alert("Gagal menambahkan domain.");
-            }
+            e.target.reset(); loadDomains();
         });
 
-        // Muat data saat halaman pertama kali dibuka
-        loadDomains();
+        // Logika Edit
+        function openEdit(domain, origin, limit, waf) {
+            document.getElementById('edit_old_domain').value = domain;
+            document.getElementById('edit_domain').value = domain;
+            document.getElementById('edit_origin').value = origin;
+            document.getElementById('edit_limit').value = limit;
+            document.getElementById('edit_waf').checked = waf;
+            editModal.show();
+        }
+
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const oldDomain = document.getElementById('edit_old_domain').value;
+            await fetch('/admin/api/domains/' + oldDomain, {
+                method: 'PUT', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    domain: document.getElementById('edit_domain').value, origin_server: document.getElementById('edit_origin').value,
+                    rate_limit: parseInt(document.getElementById('edit_limit').value), waf_enabled: document.getElementById('edit_waf').checked
+                })
+            });
+            editModal.hide(); loadDomains();
+        });
+
+        // Logika Hapus
+        async function deleteDomain(domain) {
+            if (confirm(`Yakin ingin menghapus ${domain} dari sistem WAF?`)) {
+                await fetch('/admin/api/domains/' + domain, { method: 'DELETE' });
+                loadDomains();
+            }
+        }
+
+        // --- 4. LOG SERANGAN ---
+        async function loadLogs() {
+            const res = await fetch('/admin/api/logs');
+            const data = await res.json();
+            document.getElementById('total-logs').innerText = data.length;
+            const tbody = document.querySelector('#logTable tbody'); tbody.innerHTML = '';
+            data.forEach(item => {
+                tbody.innerHTML += `<tr><td class="ps-4">${item.timestamp}</td><td class="fw-bold text-danger">${item.ip_address}</td><td>${item.domain}</td><td><span class="badge bg-warning text-dark">${item.threat_type}</span></td></tr>`;
+            });
+        }
+
+        // Inisialisasi saat pertama buka
+        checkAuth();
+        loadLogs(); // Load statistik log di background untuk beranda
     </script>
 </body>
 </html>

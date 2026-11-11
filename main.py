@@ -2,6 +2,7 @@ import time
 import re
 import httpx
 import sqlite3
+import socket
 from datetime import datetime
 from fastapi import FastAPI, Request, Response, HTTPException, Header
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -17,7 +18,6 @@ DB_FILE = "waf_database.db"
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # Tambahan kolom: status dan owner
     cursor.execute('''CREATE TABLE IF NOT EXISTS clients (domain TEXT PRIMARY KEY, origin_server TEXT NOT NULL, waf_enabled BOOLEAN NOT NULL, rate_limit INTEGER NOT NULL, status TEXT NOT NULL, owner TEXT NOT NULL)''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT NOT NULL, role TEXT NOT NULL)''')
     cursor.execute("INSERT OR IGNORE INTO users VALUES ('admin', 'admin123', 'admin')")
@@ -31,7 +31,7 @@ templates = Jinja2Templates(directory="templates")
 
 class ClientConfig(BaseModel):
     domain: str
-    origin_server: str
+    origin_server: Optional[str] = "" # Dibuat opsional agar bisa diisi otomatis jika kosong
     waf_enabled: bool = True
     rate_limit: int = 20
 
@@ -84,12 +84,22 @@ def get_all_domains(x_role: str = Header(...), x_username: str = Header(...)):
 def add_domain(config: ClientConfig, x_role: str = Header(...), x_username: str = Header(...)):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    # Jika admin yang tambah, langsung "approved" & WAF aktif. Jika user, status "pending" & WAF dimatikan sementara
+    
+    # --- OTOMATISASI PENCARIAN IP (AUTO-DISCOVERY) ---
+    origin = config.origin_server
+    if not origin or origin.strip() == "":
+        try:
+            # Mengubah nama domain menjadi alamat IP asli via DNS Lookup
+            ip_address = socket.gethostbyname(config.domain)
+            origin = f"http://{ip_address}"
+        except socket.gaierror:
+            origin = "http://127.0.0.1" # Fallback jika domain tidak ditemukan
+    
     status = 'approved' if x_role == 'admin' else 'pending'
     waf_status = config.waf_enabled if x_role == 'admin' else False
     
     cursor.execute("INSERT OR REPLACE INTO clients VALUES (?, ?, ?, ?, ?, ?)", 
-                   (config.domain, config.origin_server, waf_status, config.rate_limit, status, x_username))
+                   (config.domain, origin, waf_status, config.rate_limit, status, x_username))
     conn.commit()
     conn.close()
     return {"message": "Pengajuan berhasil"}
@@ -155,7 +165,6 @@ async def reverse_proxy(request: Request, path: str):
     if not row: return JSONResponse(status_code=404, content={"error": "Domain tidak terdaftar."})
     client_config = {"origin": row[0], "waf_enabled": bool(row[1]), "rate_limit": row[2], "status": row[3]}
     
-    # Blokir akses jika belum di-ACC Admin
     if client_config["status"] == "pending":
         return JSONResponse(status_code=403, content={"error": "Domain ini sedang menunggu persetujuan Admin."})
 
@@ -177,5 +186,10 @@ async def reverse_proxy(request: Request, path: str):
         url = httpx.URL(path=request.url.path, query=request.url.query.encode("utf-8"))
         try:
             proxy_resp = await client.send(client.build_request(request.method, url, content=await request.body(), headers={k: v for k, v in request.headers.items() if k.lower() != "host"}), stream=True)
-            return Response(content=await proxy_resp.aread(), status_code=proxy_resp.status_code, headers=dict(proxy_resp.headers))
+            
+            custom_headers = dict(proxy_resp.headers)
+            custom_headers["X-Protected-By"] = "Cloudflare Mini - WAF Enterprise"
+            custom_headers["X-WAF-Status"] = "Active"
+            
+            return Response(content=await proxy_resp.aread(), status_code=proxy_resp.status_code, headers=custom_headers)
         except httpx.RequestError: return JSONResponse(status_code=502, content={"error": "Bad Gateway"})

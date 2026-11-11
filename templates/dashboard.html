@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare Mini - Dashboard Manajemen</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cloudflare Mini - Admin Dashboard</h1>
+        
+        <h2>Tambah Domain Klien</h2>
+        <form id="domainForm">
+            <div class="form-group">
+                <label>Nama Domain (Misal: web-klien.com)</label>
+                <input type="text" id="domain" required>
+            </div>
+            <div class="form-group">
+                <label>IP / URL Asli (Origin Server) (Misal: http://192.168.1.100)</label>
+                <input type="text" id="origin_server" required>
+            </div>
+            <div class="form-group">
+                <label>Batas Rate Limit (Request per 10 detik)</label>
+                <input type="number" id="rate_limit" value="10" required>
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="waf_enabled" checked> Aktifkan WAF (Anti SQLi & XSS)</label>
+            </div>
+            <button type="submit">Simpan & Aktifkan Proksi</button>
+        </form>
+
+        <h2>Daftar Klien Aktif</h2>
+        <table id="domainTable">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Origin Server</th>
+                    <th>WAF</th>
+                    <th>Rate Limit</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data akan dimuat dari database melalui JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Fungsi mengambil data dari API backend dan menampilkannya di tabel
+        async function loadDomains() {
+            const response = await fetch('/admin/api/domains');
+            const data = await response.json();
+            const tbody = document.querySelector('#domainTable tbody');
+            tbody.innerHTML = '';
+            
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.domain}</td>
+                    <td>${item.origin_server}</td>
+                    <td>${item.waf_enabled ? 'Aktif' : 'Mati'}</td>
+                    <td>${item.rate_limit} req</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Fungsi mengirim data formulir ke API backend
+        document.getElementById('domainForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const payload = {
+                domain: document.getElementById('domain').value,
+                origin_server: document.getElementById('origin_server').value,
+                waf_enabled: document.getElementById('waf_enabled').checked,
+                rate_limit: parseInt(document.getElementById('rate_limit').value)
+            };
+
+            const response = await fetch('/admin/api/domains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert("Domain klien berhasil didaftarkan!");
+                document.getElementById('domainForm').reset();
+                loadDomains(); // Muat ulang tabel
+            } else {
+                alert("Gagal menambahkan domain.");
+            }
+        });
+
+        // Muat data saat halaman pertama kali dibuka
+        loadDomains();
+    </script>
+</body>
+</html>
